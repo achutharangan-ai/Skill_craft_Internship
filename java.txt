@@ -1,0 +1,406 @@
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
+import java.util.*;
+
+
+public class TaskSchedulerPRO extends JFrame {
+
+    private String[] tasks = new String[200];
+    private String[] notes = new String[200];
+    private String[] priority = new String[200];
+    private boolean[] completed = new boolean[200];
+    private int count = 0;
+
+    private DefaultListModel<String> model;
+    private JList<String> taskList;
+    private JTextField taskInput;
+    private int autoNumber = 1;
+    
+    private JPanel totalLabel, completedLabel, pendingLabel;
+    private JLabel totalDisplay, completedDisplay, pendingDisplay;
+
+    public TaskSchedulerPRO() {
+        setTitle("TaskScheduler PRO");
+        setSize(700, 800);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+
+        // Main content pane with gradient
+        setContentPane(new JPanel() {
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                GradientPaint gp = new GradientPaint(0, 0, new Color(102, 51, 153),
+                                                     0, getHeight(), new Color(153, 102, 204));
+                g2d.setPaint(gp);
+                g2d.fillRect(0, 0, getWidth(), getHeight());
+            }
+        });
+
+        // Main card container
+        JPanel mainCard = new JPanel();
+        mainCard.setBackground(Color.WHITE);
+        mainCard.setLayout(new BorderLayout(0, 0));
+        mainCard.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        // Wrapper for card with shadow effect
+        JPanel wrapper = new JPanel() {
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                // Shadow
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setColor(new Color(0, 0, 0, 30));
+                g2d.fillRect(3, 3, getWidth() - 3, getHeight() - 3);
+            }
+        };
+        wrapper.setBackground(new Color(240, 240, 250));
+        wrapper.setLayout(new BorderLayout());
+        wrapper.add(mainCard);
+        add(wrapper);
+
+        // ===== HEADER SECTION =====
+        JPanel header = new JPanel();
+        header.setBackground(Color.WHITE);
+        header.setLayout(new BorderLayout(20, 10));
+        header.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        JLabel title = new JLabel("TASK SCHEDULER");
+        title.setFont(new Font("SansSerif", Font.BOLD, 26));
+        title.setForeground(new Color(102, 51, 153));
+        header.add(title, BorderLayout.WEST);
+
+        // Stats panel
+        JPanel statsPanel = new JPanel(new GridLayout(1, 3, 15, 0));
+        statsPanel.setBackground(Color.WHITE);
+        
+        totalLabel = createStatLabel("0", "Total");
+        completedLabel = createStatLabel("0", "Completed");
+        pendingLabel = createStatLabel("0", "Pending");
+        
+        statsPanel.add(totalLabel);
+        statsPanel.add(completedLabel);
+        statsPanel.add(pendingLabel);
+        
+        header.add(statsPanel, BorderLayout.EAST);
+        mainCard.add(header, BorderLayout.NORTH);
+
+        // ===== DIVIDER =====
+        JSeparator sep = new JSeparator(SwingConstants.HORIZONTAL);
+        sep.setBackground(new Color(220, 220, 220));
+        mainCard.add(sep, BorderLayout.NORTH);
+
+        // ===== TASK LIST SECTION =====
+        model = new DefaultListModel<>();
+        taskList = new JList<>(model);
+        taskList.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        taskList.setBackground(new Color(250, 250, 255));
+        taskList.setSelectionBackground(new Color(200, 150, 220));
+        taskList.setSelectionForeground(Color.BLACK);
+        taskList.setCellRenderer(new ModernTaskRenderer());
+        taskList.setFixedCellHeight(50);
+
+        JScrollPane scroll = new JScrollPane(taskList);
+        scroll.setBorder(new EmptyBorder(15, 15, 15, 15));
+        scroll.getViewport().setBackground(new Color(250, 250, 255));
+        mainCard.add(scroll, BorderLayout.CENTER);
+
+        // ===== INPUT & BUTTONS SECTION =====
+        JPanel inputPanel = new JPanel();
+        inputPanel.setBackground(Color.WHITE);
+        inputPanel.setLayout(new BorderLayout(10, 10));
+        inputPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        // Input field
+        taskInput = new JTextField();
+        taskInput.setFont(new Font("SansSerif", Font.PLAIN, 15));
+        taskInput.setText("Enter task...");
+        taskInput.setForeground(new Color(150, 150, 150));
+        taskInput.setBorder(new RoundedBorder(8, new Color(180, 150, 200)));
+        taskInput.setPreferredSize(new Dimension(0, 40));
+        
+        taskInput.addFocusListener(new FocusAdapter() {
+            public void focusGained(FocusEvent e) {
+                if (taskInput.getText().equals("Enter task...")) {
+                    taskInput.setText("");
+                    taskInput.setForeground(Color.BLACK);
+                }
+            }
+            public void focusLost(FocusEvent e) {
+                if (taskInput.getText().isEmpty()) {
+                    taskInput.setText("Enter task...");
+                    taskInput.setForeground(new Color(150, 150, 150));
+                }
+            }
+        });
+        
+        taskInput.addKeyListener(new KeyAdapter() {
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    addTask();
+                }
+            }
+        });
+
+        inputPanel.add(taskInput, BorderLayout.CENTER);
+
+        // Buttons panel
+        JPanel btnPanel = new JPanel(new GridLayout(1, 5, 10, 0));
+        btnPanel.setBackground(Color.WHITE);
+
+        JButton addBtn = modernButton("ADD", new Color(102, 51, 153));
+        JButton delBtn = modernButton("DELETE", new Color(200, 50, 50));
+        JButton doneBtn = modernButton("DONE", new Color(50, 150, 50));
+        JButton clearBtn = modernButton("CLEAR", new Color(255, 150, 0));
+        JButton noteBtn = modernButton("NOTE", new Color(0, 120, 200));
+
+        addBtn.addActionListener(e -> addTask());
+        delBtn.addActionListener(e -> deleteTask());
+        doneBtn.addActionListener(e -> markDone());
+        clearBtn.addActionListener(e -> clearAll());
+        noteBtn.addActionListener(e -> showNotes());
+
+        btnPanel.add(addBtn);
+        btnPanel.add(delBtn);
+        btnPanel.add(doneBtn);
+        btnPanel.add(clearBtn);
+        btnPanel.add(noteBtn);
+
+        inputPanel.add(btnPanel, BorderLayout.SOUTH);
+        mainCard.add(inputPanel, BorderLayout.SOUTH);
+
+        setVisible(true);
+    }
+
+    // Create stat label
+    private JPanel createStatLabel(String count, String label) {
+        JLabel l = new JLabel(count, SwingConstants.CENTER);
+        l.setFont(new Font("SansSerif", Font.BOLD, 16));
+        l.setForeground(new Color(102, 51, 153));
+        
+        // Store reference for updates
+        if (label.equals("Total")) {
+            totalDisplay = l;
+        } else if (label.equals("Completed")) {
+            completedDisplay = l;
+        } else if (label.equals("Pending")) {
+            pendingDisplay = l;
+        }
+        
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(new Color(245, 240, 250));
+        p.setBorder(new RoundedBorder(6, new Color(200, 150, 220)));
+        p.add(l, BorderLayout.CENTER);
+        
+        JLabel sublabel = new JLabel(label, SwingConstants.CENTER);
+        sublabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        sublabel.setForeground(new Color(150, 100, 180));
+        
+        JPanel container = new JPanel(new BorderLayout());
+        container.setBackground(Color.WHITE);
+        container.add(p, BorderLayout.CENTER);
+        container.add(sublabel, BorderLayout.SOUTH);
+        
+        return container;
+    }
+
+    // Modern button style
+    private JButton modernButton(String text, Color bgColor) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btn.setFocusPainted(false);
+        btn.setBackground(bgColor);
+        btn.setForeground(Color.WHITE);
+        btn.setBorder(new RoundedBorder(6, bgColor));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        btn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                btn.setBackground(bgColor.darker());
+            }
+            public void mouseExited(MouseEvent e) {
+                btn.setBackground(bgColor);
+            }
+        });
+        
+        return btn;
+    }
+
+    // Update stats
+    private void updateStats() {
+        totalDisplay.setText(String.valueOf(count));
+        
+        int comp = 0;
+        for (int i = 0; i < count; i++) {
+            if (completed[i]) comp++;
+        }
+        
+        completedDisplay.setText(String.valueOf(comp));
+        pendingDisplay.setText(String.valueOf(count - comp));
+    }
+
+    private void addTask() {
+        String input = taskInput.getText().trim();
+        if (input.isEmpty() || input.equals("Enter task...")) {
+            input = "Task " + autoNumber++;
+        }
+
+        String[] options = {"LOW", "MEDIUM", "HIGH"};
+        String p = (String) JOptionPane.showInputDialog(this, "Select Priority:", "Task Priority",
+                JOptionPane.PLAIN_MESSAGE, null, options, "LOW");
+        if (p == null) return;
+
+        String note = JOptionPane.showInputDialog(this, "Add note (optional):", "");
+        if (note == null) note = "";
+
+        tasks[count] = input;
+        priority[count] = p;
+        notes[count] = note;
+        completed[count] = false;
+
+        model.addElement(input + " | " + p);
+        count++;
+        taskInput.setText("");
+        updateStats();
+    }
+
+    private void deleteTask() {
+        int i = taskList.getSelectedIndex();
+        if (i == -1) {
+            JOptionPane.showMessageDialog(this, "Select a task first!", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        model.remove(i);
+        for (int j = i; j < count - 1; j++) {
+            tasks[j] = tasks[j + 1];
+            notes[j] = notes[j + 1];
+            priority[j] = priority[j + 1];
+            completed[j] = completed[j + 1];
+        }
+        count--;
+        updateStats();
+    }
+
+    private void markDone() {
+        int i = taskList.getSelectedIndex();
+        if (i == -1) {
+            JOptionPane.showMessageDialog(this, "Select a task first!", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        completed[i] = !completed[i];
+        model.set(i, tasks[i] + " | " + priority[i] + " | " + (completed[i] ? "[DONE]" : "PENDING"));
+        updateStats();
+    }
+
+    private void clearAll() {
+        int choice = JOptionPane.showConfirmDialog(this, "Clear all tasks?", "Confirm", JOptionPane.YES_NO_OPTION);
+        if (choice == JOptionPane.YES_OPTION) {
+            model.clear();
+            count = 0;
+            autoNumber = 1;
+            updateStats();
+        }
+    }
+
+    private void showNotes() {
+        int i = taskList.getSelectedIndex();
+        if (i == -1) {
+            JOptionPane.showMessageDialog(this, "Select a task first!", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        String message = notes[i].isEmpty() ? "No notes added." : notes[i];
+        JOptionPane.showMessageDialog(this, message, "Task Notes", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Modern task renderer
+    class ModernTaskRenderer extends JPanel implements ListCellRenderer<String> {
+        private JLabel taskLabel;
+        private String taskText;
+        private String priorityLevel;
+        private boolean isSelected;
+
+        public ModernTaskRenderer() {
+            setLayout(new BorderLayout(10, 0));
+            setOpaque(true);
+            taskLabel = new JLabel();
+            taskLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
+            add(taskLabel, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<? extends String> list, String value,
+                int index, boolean selected, boolean focused) {
+            taskText = value;
+            isSelected = selected;
+
+            priorityLevel = value.contains("HIGH") ? "HIGH"
+                    : value.contains("MEDIUM") ? "MEDIUM"
+                    : "LOW";
+
+            taskLabel.setText(value);
+            taskLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
+
+            if (selected) {
+                setBackground(new Color(200, 150, 220));
+                taskLabel.setForeground(Color.WHITE);
+            } else {
+                setBackground(Color.WHITE);
+                taskLabel.setForeground(Color.BLACK);
+            }
+
+            setBorder(new EmptyBorder(8, 12, 8, 12));
+            return this;
+        }
+
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            Color priorityColor = switch (priorityLevel) {
+                case "HIGH" -> new Color(220, 50, 50);
+                case "MEDIUM" -> new Color(255, 150, 0);
+                default -> new Color(50, 180, 50);
+            };
+
+            g2d.setColor(priorityColor);
+            g2d.fillRoundRect(0, 5, 5, getHeight() - 10, 3, 3);
+        }
+    }
+
+    // Rounded border helper
+    static class RoundedBorder extends AbstractBorder {
+        private final int radius;
+        private final Color color;
+
+        public RoundedBorder(int radius, Color color) {
+            this.radius = radius;
+            this.color = color;
+        }
+
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setColor(color);
+            g2d.setStroke(new BasicStroke(2));
+            g2d.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+        }
+
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(5, 10, 5, 10);
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new TaskSchedulerPRO());
+    }
+}
